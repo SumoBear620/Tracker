@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Monthly Log">
+<title>Monthly Log</title>
+<style>
+  :root { --bg:#0f1115; --card:#1a1d24; --text:#f2f4f8; --muted:#8b93a3; --accent:#4f8cff; --ok:#34c759; --warn:#ff9f0a; --line:#2a2f3a; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif; padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom); min-height:100vh; }
+  .wrap { max-width:520px; margin:0 auto; padding:16px 0 40px; }
+  h1 { font-size:22px; margin:8px 0 4px; }
+  h2 { font-size:18px; margin:0 0 8px; }
+  .muted { color:var(--muted); font-size:14px; line-height:1.4; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; margin:14px 0; }
+  .bar { height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin:10px 0; }
+  .bar > div { height:100%; background:var(--accent); }
+  .row { display:flex; gap:10px; margin-top:12px; }
+  button { flex:1; padding:14px; font-size:16px; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--text); font-weight:600; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.danger { color:#ff453a; }
+  input[type=number], input[type=text] { width:100%; padding:14px; font-size:22px; border-radius:12px; border:1px solid var(--line); background:#0f1115; color:var(--text); margin-top:10px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  td, th { padding:8px 4px; border-bottom:1px solid var(--line); text-align:left; }
+  th { color:var(--muted); font-weight:600; font-size:12px; }
+  .pos { color:var(--ok); } .neg { color:var(--warn); }
+  .tag { display:inline-block; font-size:11px; color:var(--muted); border:1px solid var(--line); padding:2px 8px; border-radius:20px; margin-bottom:8px; }
+  textarea { width:100%; height:200px; background:#0f1115; color:var(--text); border:1px solid var(--line); border-radius:12px; padding:10px; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script>
+const STEPS = [
+  {k:"weight", n:"Weight (lbs)", g:"Body", h:"Morning, after the bathroom, before eating or drinking, same scale every time. Or copy from Apple Health."},
+  {k:"bodyfat", n:"Body Fat (%)", g:"Body", h:"From a smart scale or Apple Health if you have one. Skip if you don't."},
+  {k:"neck", n:"Neck", g:"Upper Body", h:"Tape just below the Adam's apple, level all the way around, snug but not tight."},
+  {k:"shoulders", n:"Shoulders", g:"Upper Body", h:"Tape around the widest point across both deltoids, arms relaxed at your sides."},
+  {k:"chest_relaxed", n:"Chest (relaxed)", g:"Upper Body", h:"Tape across the nipple line and under the armpits, after a normal exhale."},
+  {k:"chest_expanded", n:"Chest (expanded)", g:"Upper Body", h:"Same spot as above, at full inhale."},
+  {k:"nipple_diam", n:"Nipple/Areola Diameter", g:"Upper Body", h:"Edge to edge of the areola, horizontally, relaxed (not cold or aroused). Use a small ruler."},
+  {k:"nipple_len", n:"Nipple Length", g:"Upper Body", h:"Base to tip of the nipple, relaxed, using a small ruler."},
+  {k:"arm_relaxed", n:"Upper Arm (relaxed, right)", g:"Arms", h:"Tape around the midpoint between shoulder and elbow, arm hanging relaxed."},
+  {k:"arm_flexed", n:"Upper Arm (flexed, right)", g:"Arms", h:"Same spot, bicep fully flexed at the peak."},
+  {k:"forearm", n:"Forearm (right)", g:"Arms", h:"Tape around the widest part of the forearm, arm relaxed at your side."},
+  {k:"waist_narrow", n:"Waist (narrowest)", g:"Core", h:"At the narrowest point above the belly, if there is one, after a normal exhale. Skip if not applicable."},
+  {k:"belly_navel", n:"Belly at Navel", g:"Core", h:"Tape level around the belly at the navel, relaxed, after a normal exhale. Don't suck in."},
+  {k:"belly_widest", n:"Belly at Widest Point", g:"Core", h:"Around the fullest part of the belly, tape level, relaxed."},
+  {k:"hips", n:"Hips / Glutes", g:"Lower Body", h:"Tape around the widest part of the glutes, feet together, level all the way around."},
+  {k:"thigh_upper", n:"Thigh Upper (right)", g:"Lower Body", h:"Just below the glute crease, tape level, weight evenly on both feet."},
+  {k:"thigh_mid", n:"Thigh Mid (right)", g:"Lower Body", h:"Halfway between hip bone and knee, tape level."},
+  {k:"calf", n:"Calf (right)", g:"Lower Body", h:"Around the widest part of the calf, standing, weight even."},
+  {k:"gen_flaccid_len", n:"Genital Flaccid Length", g:"Genital", h:"Ruler pressed gently against the pubic bone, measure along the top to the tip. Same room temperature each time."},
+  {k:"gen_flaccid_girth", n:"Genital Flaccid Girth", g:"Genital", h:"Soft tape around the midshaft, snug but not compressing."},
+  {k:"gen_erect_len", n:"Genital Erect Length", g:"Genital", h:"Ruler pressed against the pubic bone, along the top to the tip. Skip if not measuring today."},
+  {k:"gen_erect_girth", n:"Genital Erect Girth", g:"Genital", h:"Soft tape around the midshaft at full erection. Skip if not measuring today."},
+  {k:"notes", n:"Notes", g:"Notes", h:"Anything worth recording: sleep, training, new lifts, how you feel.", text:true}
+];
+
+const KEY = "monthlylog_v1";
+function load(){ try { return JSON.parse(localStorage.getItem(KEY)) || {sessions:[], draft:null}; } catch(e){ return {sessions:[], draft:null}; } }
+function save(d){ localStorage.setItem(KEY, JSON.stringify(d)); }
+let db = load();
+let idx = 0;
+let cur = {};
+
+const app = document.getElementById("app");
+function today(){ return new Date().toISOString().slice(0,10); }
+function lastSession(){ return db.sessions.length ? db.sessions[db.sessions.length-1] : null; }
+function firstSession(){ return db.sessions.length ? db.sessions[0] : null; }
+
+function home(){
+  const n = db.sessions.length;
+  const last = lastSession();
+  app.innerHTML = `
+    <h1>Monthly Log</h1>
+    <div class="muted">${n} saved session${n===1?"":"s"}${last ? " | last: " + last.date : ""}</div>
+    <div class="card">
+      <h2>${n===0 ? "Baseline session" : "New monthly session"}</h2>
+      <div class="muted">${db.draft ? "You have an unfinished session in progress." : "Same time of day and same conditions each month for reliable numbers. Measure twice and enter the average."}</div>
+      <div class="row"><button class="primary" onclick="begin()">${db.draft ? "Resume" : "Begin"}</button></div>
+      ${db.draft ? `<div class="row"><button class="danger" onclick="discard()">Discard Draft</button></div>` : ""}
+    </div>
+    <div class="row"><button onclick="history()">History</button><button onclick="exportView()">Export</button></div>
+    <div class="row"><button onclick="importPrompt()">Import JSON</button><button class="danger" onclick="wipe()">Erase All</button></div>`;
+}
+
+function begin(){
+  if(db.draft){ cur = db.draft.values; idx = db.draft.idx; }
+  else { cur = {}; idx = 0; }
+  step();
+}
+function discard(){ if(confirm("Discard the unfinished session?")){ db.draft = null; save(db); home(); } }
+
+function step(){
+  const s = STEPS[idx];
+  const last = lastSession();
+  const prev = last && last.values[s.k] !== undefined && last.values[s.k] !== "" ? last.values[s.k] : null;
+  const pct = Math.round((idx/STEPS.length)*100);
+  const val = cur[s.k] !== undefined ? cur[s.k] : "";
+  app.innerHTML = `
+    <div class="muted">Step ${idx+1} of ${STEPS.length}</div>
+    <div class="bar"><div style="width:${pct}%"></div></div>
+    <div class="card">
+      <span class="tag">${s.g}</span>
+      <h2>${s.n}</h2>
+      <div class="muted">${s.h}</div>
+      ${prev!==null ? `<div class="muted" style="margin-top:10px">Last time: <b>${prev}</b></div>` : ""}
+      ${s.text ? `<input type="text" id="v" value="${String(val).replace(/"/g,'"')}" placeholder="Notes">` : `<input type="number" step="0.125" inputmode="decimal" id="v" value="${val}" placeholder="Enter value">`}
+    </div>
+    <div class="row">
+      <button onclick="back()">Back</button>
+      <button onclick="skip()">Skip</button>
+      <button class="primary" onclick="next()">${idx===STEPS.length-1 ? "Finish" : "Next"}</button>
+    </div>
+    <div class="row"><button onclick="pause()">Save and Exit</button></div>`;
+}
+
+function capture(){
+  const el = document.getElementById("v"); if(!el) return;
+  const s = STEPS[idx];
+  if(el.value === "") { delete cur[s.k]; return; }
+  cur[s.k] = s.text ? el.value : parseFloat(el.value);
+}
+function persistDraft(){ db.draft = {values:cur, idx:idx}; save(db); }
+function next(){ capture(); if(idx < STEPS.length-1){ idx++; persistDraft(); step(); } else finish(); }
+function skip(){ const s = STEPS[idx]; delete cur[s.k]; if(idx < STEPS.length-1){ idx++; persistDraft(); step(); } else finish(); }
+function back(){ capture(); if(idx>0){ idx--; persistDraft(); step(); } else { persistDraft(); home(); } }
+function pause(){ capture(); persistDraft(); home(); }
+
+function finish(){
+  db.sessions.push({date: today(), values: cur});
+  db.draft = null; save(db);
+  summary(db.sessions.length-1);
+}
+
+function fmtDelta(d){
+  if(d===null || isNaN(d)) return "";
+  if(Math.abs(d) < 0.25) return `<span class="muted">~0</span>`;
+  const sign = d > 0 ? "+" : "";
+  return `<span class="${d>0?'pos':'neg'}">${sign}${d.toFixed(2)}</span>`;
+}
+
+function summary(i){
+  const s = db.sessions[i];
+  const prev = i>0 ? db.sessions[i-1] : null;
+  const base = db.sessions[0];
+  let rows = "";
+  STEPS.filter(x=>!x.text).forEach(st=>{
+    const v = s.values[st.k];
+    if(v===undefined) return;
+    const dp = prev && prev.values[st.k]!==undefined ? v - prev.values[st.k] : null;
+    const db0 = i>0 && base.values[st.k]!==undefined ? v - base.values[st.k] : null;
+    rows += `<tr><td>${st.n}</td><td>${v}</td><td>${fmtDelta(dp)}</td><td>${fmtDelta(db0)}</td></tr>`;
+  });
+  app.innerHTML = `
+    <h1>Session ${s.date}</h1>
+    <div class="muted">Changes under 0.25 are treated as measurement noise.</div>
+    <div class="card"><table><tr><th>Item</th><th>Now</th><th>vs Last</th><th>vs Start</th></tr>${rows}</table>
+    ${s.values.notes ? `<div class="muted" style="margin-top:12px">Notes: ${s.values.notes}</div>` : ""}</div>
+    <div class="row"><button class="primary" onclick="exportView()">Export for AI</button></div>
+    <div class="row"><button onclick="home()">Done</button></div>`;
+}
+
+function history(){
+  if(!db.sessions.length){ app.innerHTML = `<h1>History</h1><div class="card muted">No sessions yet.</div><div class="row"><button onclick="home()">Back</button></div>`; return; }
+  let list = db.sessions.map((s,i)=>`<div class="row"><button onclick="summary(${i})">${s.date}</button><button class="danger" style="flex:0 0 80px" onclick="delSession(${i})">Delete</button></div>`).join("");
+  app.innerHTML = `<h1>History</h1><div class="card">${list}</div><div class="row"><button onclick="home()">Back</button></div>`;
+}
+function delSession(i){ if(confirm("Delete this session?")){ db.sessions.splice(i,1); save(db); history(); } }
+
+function csvText(){
+  const cols = STEPS.map(s=>s.k);
+  let out = "date," + cols.join(",") + "\n";
+  db.sessions.forEach(s=>{
+    out += s.date + "," + cols.map(c=>{ const v = s.values[c]; return v===undefined ? "" : '"' + String(v).replace(/"/g,'""') + '"'; }).join(",") + "\n";
+  });
+  return out;
+}
+function aiText(){
+  return "Here is my monthly body measurement history (inches and lbs). Row 1 is my baseline. Please calculate the change from baseline and from last month for each measurement, flag anything that moved more than about 0.25 inches, and tell me what the pattern suggests for my strength training goals (arms, chest, legs, core strength). Be analytical and objective, with no weight-loss commentary.\n\n" + csvText();
+}
+function exportView(){
+  app.innerHTML = `
+    <h1>Export</h1>
+    <div class="card">
+      <div class="muted">Copy this and paste it into an AI chat for analysis.</div>
+      <textarea id="out" readonly>${aiText()}</textarea>
+      <div class="row"><button class="primary" onclick="copyOut()">Copy for AI</button></div>
+      <div class="row"><button onclick="copyJSON()">Copy JSON Backup</button></div>
+      <div class="row"><button onclick="home()">Back</button></div>
+    </div>`;
+}
+function copyOut(){ navigator.clipboard.writeText(aiText()).then(()=>alert("Copied")); }
+function copyJSON(){ navigator.clipboard.writeText(JSON.stringify(db)).then(()=>alert("JSON copied. Paste it into Notes as a backup.")); }
+function importPrompt(){
+  const t = prompt("Paste JSON backup:"); if(!t) return;
+  try { const d = JSON.parse(t); if(d.sessions){ db = d; save(db); alert("Imported"); home(); } else alert("Invalid backup"); } catch(e){ alert("Invalid JSON"); }
+}
+function wipe(){ if(confirm("Erase ALL data? This cannot be undone.")){ db = {sessions:[], draft:null}; save(db); home(); } }
+
+home();
+</script>
+</body>
+</html>
